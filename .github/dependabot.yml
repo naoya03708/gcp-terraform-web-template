@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directories:
+      - "/"
+      - "/.github/actions/setup-tools"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: terraform
+    directories:
+      - "/"
+    schedule:
+      interval: weekly
+    # ルート・各モジュール・bootstrap のプロバイダ制約は揃える必要があるため1つの PR にまとめる
+    groups:
+      terraform-providers:
+        patterns: ["*"]
