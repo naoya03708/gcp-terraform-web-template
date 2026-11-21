@@ -1,0 +1,30 @@
+# Terraform / Terragrunt
+.terraform/
+.terraform.lock.hcl.bak
+.terragrunt-cache/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfplan
+tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Terragrunt が自動生成する backend 設定
+backend.tf
+
+# 機密を含みうるローカル用 tfvars（dev.tfvars / prod.tfvars はコミット対象）
+*.auto.tfvars
+secret*.tfvars
+
+# GCP の認証情報（長期キーは使わない方針。誤コミット防止）
+*-key.json
+*credentials*.json
+application_default_credentials.json
+service-account*.json
+
+# OS / Editor
+.DS_Store
+.idea/
