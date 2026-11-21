@@ -28,3 +28,32 @@ resource "google_project_service" "this" {
   service            = each.value
   disable_on_destroy = false
 }
+
+module "network" {
+  source = "./modules/network"
+
+  name        = local.name
+  region      = var.region
+  subnet_cidr = var.subnet_cidr
+  enable_nat  = var.enable_nat
+
+  depends_on = [google_project_service.this]
+}
+
+module "cloudsql" {
+  source = "./modules/cloudsql"
+
+  name                   = local.name
+  region                 = var.region
+  network_id             = module.network.network_id
+  tier                   = var.db_tier
+  disk_size_gb           = var.db_disk_size_gb
+  availability_type      = var.db_availability_type
+  point_in_time_recovery = var.db_point_in_time_recovery
+  backup_retention_days  = var.db_backup_retention_days
+  deletion_protection    = var.deletion_protection
+  db_name                = var.db_name
+
+  # private services access の接続ができてから Cloud SQL を作る（destroy では逆順になる）
+  depends_on = [module.network]
+}
