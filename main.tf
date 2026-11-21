@@ -74,6 +74,7 @@ module "cloudrun" {
   subnetwork            = module.network.subnet_name
   allow_unauthenticated = var.allow_unauthenticated
   deletion_protection   = var.deletion_protection
+  ingress               = var.enable_lb ? "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER" : "INGRESS_TRAFFIC_ALL"
 
   environment = {
     DB_HOST = module.cloudsql.private_ip_address
@@ -102,4 +103,16 @@ module "monitoring" {
   slo_latency_target       = var.slo_latency_target
   slo_latency_threshold_ms = var.slo_latency_threshold_ms
   alarm_email              = var.alarm_email
+}
+
+# 外部 HTTPS LB + Cloud Armor（任意）。LB を使うときは、Cloud Run への直接アクセス（*.run.app）を閉じる。
+module "armor" {
+  count  = var.enable_lb ? 1 : 0
+  source = "./modules/armor"
+
+  name         = local.name
+  region       = var.region
+  service_name = module.cloudrun.service_name
+  domain_name  = var.domain_name
+  enable_armor = var.enable_armor
 }
