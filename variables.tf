@@ -72,3 +72,48 @@ variable "deletion_protection" {
   description = "true の場合、DB の削除を拒否する（dev は false、prod は true）"
   type        = bool
 }
+
+# --- Cloud Run ---
+variable "container_image" {
+  description = "デプロイするコンテナイメージ"
+  type        = string
+  default     = "us-docker.pkg.dev/cloudrun/container/hello"
+}
+
+variable "container_port" {
+  description = "コンテナの待受ポート"
+  type        = number
+  default     = 8080
+}
+
+variable "health_check_path" {
+  description = "起動プローブ（HTTP）のパス"
+  type        = string
+  default     = "/"
+}
+
+variable "run_cpu" {
+  description = "Cloud Run インスタンスあたりの CPU"
+  type        = string
+}
+
+variable "run_memory" {
+  description = "Cloud Run インスタンスあたりのメモリ"
+  type        = string
+}
+
+variable "run_min_instances" {
+  description = "最小インスタンス数（0 で scale-to-zero）"
+  type        = number
+}
+
+variable "run_max_instances" {
+  description = "最大インスタンス数"
+  type        = number
+}
+
+variable "allow_unauthenticated" {
+  description = "true の場合、未認証のアクセスを許可する（Web アプリの公開用）"
+  type        = bool
+  default     = true
+}

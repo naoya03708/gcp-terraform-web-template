@@ -9,3 +9,8 @@ db_point_in_time_recovery = false
 db_backup_retention_days  = 3
 
 deletion_protection = false
+
+run_cpu           = "1"
+run_memory        = "512Mi"
+run_min_instances = 0
+run_max_instances = 2

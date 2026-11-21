@@ -57,3 +57,36 @@ module "cloudsql" {
   # private services access の接続ができてから Cloud SQL を作る（destroy では逆順になる）
   depends_on = [module.network]
 }
+
+module "cloudrun" {
+  source = "./modules/cloudrun"
+
+  name                  = local.name
+  region                = var.region
+  container_image       = var.container_image
+  container_port        = var.container_port
+  health_check_path     = var.health_check_path
+  cpu                   = var.run_cpu
+  memory                = var.run_memory
+  min_instances         = var.run_min_instances
+  max_instances         = var.run_max_instances
+  network               = module.network.network_name
+  subnetwork            = module.network.subnet_name
+  allow_unauthenticated = var.allow_unauthenticated
+  deletion_protection   = var.deletion_protection
+
+  environment = {
+    DB_HOST = module.cloudsql.private_ip_address
+    DB_PORT = "5432"
+    DB_NAME = module.cloudsql.db_name
+    DB_USER = module.cloudsql.db_user
+  }
+
+  # DB パスワードは Secret Manager のシークレットを、固定バージョンの参照で渡す（平文を持たない）
+  secrets = {
+    DB_PASSWORD = {
+      secret_id = module.cloudsql.password_secret_id
+      version   = module.cloudsql.password_secret_version
+    }
+  }
+}
