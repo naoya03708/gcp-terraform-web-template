@@ -87,7 +87,7 @@ ENV=dev terragrunt destroy                 # 検証が終わったら、必ず�
 
 - **DB のパスワードは、Terraform の state に残ります**（`random_password`）。state バケットのアクセス制御と暗号化で守っています。plan 用の SA も、state を読めます（ADR 0005 / 0006）。
 - devcontainer の `gcloud` は、**サードパーティの feature**（`ghcr.io/dhoeric/features/google-cloud-cli`）です。ビルド時に、その提供元のコードが実行されます。
-- provider の lock ファイル（`.terraform.lock.hcl`）は、まだコミットしていません。複数プラットフォームのハッシュを入れて、別の PR で追加します。
+- provider の lock ファイル（`.terraform.lock.hcl`、ルートと `bootstrap/wif`）をコミットしています（linux / darwin の amd64・arm64 のハッシュ入り）。provider を更新するときは、Dependabot の PR で、lock も更新されることを確認してください。
 - apply 用のサービスアカウントのロールは、広めです（オーナー / エディタは付けていません）。実運用では絞り込んでください（ADR 0006）。
 - 公開リポジトリのため、プロジェクト ID、メールアドレスなどは、コードに書かず、環境変数と GitHub Secrets で渡します。
 
