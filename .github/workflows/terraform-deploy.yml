@@ -1,0 +1,110 @@
+name: terraform-deploy
+
+# トランクベースのデプロイ:
+#   main へのマージ      -> dev へ自動 apply（リポジトリ変数 AUTO_DEPLOY_DEV=true の時のみ。誤課金防止）
+#   リリースタグ v*      -> prod へ apply（GitHub Environment "prod" の承認が必要）
+# 環境ごとのブランチは持たず、同じコミット（アーティファクト）を dev -> prod へ昇格させる。
+# GitHub Secrets（GCP_PROJECT / GCP_WIF_PROVIDER / GCP_APPLY_SA）が未設定の間は、認証以降のステップをスキップする。
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TG_NON_INTERACTIVE: "true"
+
+jobs:
+  dev:
+    if: github.ref_type == 'branch' && vars.AUTO_DEPLOY_DEV == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: dev
+    concurrency:
+      group: terraform-deploy-dev
+      cancel-in-progress: false
+    env:
+      ENV: dev
+      GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+    steps:
+      - name: Check configuration
+        id: gate
+        env:
+          WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER }}
+          APPLY_SA: ${{ secrets.GCP_APPLY_SA }}
+        run: |
+          if [ -n "$GCP_PROJECT" ] && [ -n "$WIF_PROVIDER" ] && [ -n "$APPLY_SA" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GCP の Secrets が未設定のため、apply をスキップします。"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.gate.outputs.enabled == 'true'
+
+      - uses: ./.github/actions/setup-tools
+        if: steps.gate.outputs.enabled == 'true'
+
+      - uses: google-github-actions/auth@v3
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_APPLY_SA }}
+
+      - name: terragrunt apply (dev)
+        if: steps.gate.outputs.enabled == 'true'
+        run: terragrunt apply -auto-approve -input=false -lock-timeout=300s
+
+  prod:
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: prod # 必須レビュアーによる承認ゲート
+    concurrency:
+      group: terraform-deploy-prod
+      cancel-in-progress: false
+    env:
+      ENV: prod
+      GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+    steps:
+      - name: Check configuration
+        id: gate
+        env:
+          WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER }}
+          APPLY_SA: ${{ secrets.GCP_APPLY_SA }}
+        run: |
+          if [ -n "$GCP_PROJECT" ] && [ -n "$WIF_PROVIDER" ] && [ -n "$APPLY_SA" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GCP の Secrets が未設定のため、apply をスキップします。"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          fetch-depth: 0
+
+      # main に入っていないコミット（レビュー・CI を経ていないもの）は本番へ出さない
+      - name: Verify tag points to a commit on main
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - uses: ./.github/actions/setup-tools
+        if: steps.gate.outputs.enabled == 'true'
+
+      - uses: google-github-actions/auth@v3
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_APPLY_SA }}
+
+      - name: terragrunt apply (prod)
+        if: steps.gate.outputs.enabled == 'true'
+        run: terragrunt apply -auto-approve -input=false -lock-timeout=300s
