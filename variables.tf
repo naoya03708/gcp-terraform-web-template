@@ -117,3 +117,25 @@ variable "allow_unauthenticated" {
   type        = bool
   default     = true
 }
+
+# --- 監視（SLO） ---
+variable "slo_availability_target" {
+  description = "可用性 SLO（30日）。Cloud Monitoring の上限は 0.999"
+  type        = number
+}
+
+variable "slo_latency_target" {
+  description = "レイテンシ SLO の達成割合（0.95 は「95% のリクエストが閾値以内」）"
+  type        = number
+}
+
+variable "slo_latency_threshold_ms" {
+  description = "レイテンシ SLO の閾値(ミリ秒)"
+  type        = number
+}
+
+variable "alarm_email" {
+  description = "アラームの通知先メールアドレス。null の場合は通知チャネルを作らない。リポジトリには書かず、TF_VAR_alarm_email で渡す"
+  type        = string
+  default     = null
+}

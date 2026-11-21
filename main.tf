@@ -90,3 +90,16 @@ module "cloudrun" {
     }
   }
 }
+
+module "monitoring" {
+  source = "./modules/monitoring"
+
+  name                     = local.name
+  project_id               = var.gcp_project_id
+  service_name             = module.cloudrun.service_name
+  db_instance_name         = module.cloudsql.instance_name
+  slo_availability_target  = var.slo_availability_target
+  slo_latency_target       = var.slo_latency_target
+  slo_latency_threshold_ms = var.slo_latency_threshold_ms
+  alarm_email              = var.alarm_email
+}

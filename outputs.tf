@@ -37,3 +37,8 @@ output "cloudrun_service_name" {
   description = "Cloud Run サービス名"
   value       = module.cloudrun.service_name
 }
+
+output "dashboard_id" {
+  description = "SLO ダッシュボードの ID"
+  value       = module.monitoring.dashboard_id
+}
