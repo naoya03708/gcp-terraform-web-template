@@ -14,3 +14,8 @@ run_cpu           = "1"
 run_memory        = "1Gi"
 run_min_instances = 1
 run_max_instances = 10
+
+# 仮の SLO（サンプルアプリ向け。実サービスでは合意した値に置き換える）
+slo_availability_target  = 0.995
+slo_latency_target       = 0.95
+slo_latency_threshold_ms = 500
