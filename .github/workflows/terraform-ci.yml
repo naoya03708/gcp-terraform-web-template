@@ -1,0 +1,123 @@
+name: terraform-ci
+
+# トランクベース: PR（短命ブランチ→main）と main への push の両方で静的チェックを実行する。
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: terraform-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TFLINT_VERSION: "v0.55.1"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-tools
+
+      - uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: ${{ env.TFLINT_VERSION }}
+
+      # クラウドの認証は不要な静的チェックのみ実行する
+      - name: terraform fmt
+        id: fmt
+        continue-on-error: true
+        run: terraform fmt -check -recursive -diff
+
+      - name: terragrunt hcl fmt
+        id: hclfmt
+        continue-on-error: true
+        run: terragrunt hcl fmt --check
+
+      - name: terraform validate
+        id: validate
+        continue-on-error: true
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+          if [ -d bootstrap/wif ]; then
+            terraform -chdir=bootstrap/wif init -backend=false -input=false
+            terraform -chdir=bootstrap/wif validate
+          fi
+
+      - name: terraform test
+        id: test
+        continue-on-error: true
+        run: |
+          if ls tests/*.tftest.hcl >/dev/null 2>&1; then
+            terraform test
+          else
+            echo "no tests yet"
+          fi
+
+      - name: tflint
+        id: tflint
+        continue-on-error: true
+        run: |
+          tflint --init
+          tflint --recursive --format compact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: trivy (misconfiguration)
+        id: trivy
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          trivyignores: .trivyignore.yaml
+
+      - name: Comment on PR
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v9
+        env:
+          RESULTS: ${{ toJSON(steps) }}
+        with:
+          script: |
+            const steps = JSON.parse(process.env.RESULTS);
+            const rows = [
+              ['terraform fmt', steps.fmt.outcome],
+              ['terragrunt hcl fmt', steps.hclfmt.outcome],
+              ['terraform validate', steps.validate.outcome],
+              ['terraform test', steps.test.outcome],
+              ['tflint', steps.tflint.outcome],
+              ['trivy', steps.trivy.outcome],
+            ];
+            const icon = (o) => (o === 'success' ? '✅' : '❌');
+            const marker = '<!-- terraform-ci -->';
+            const body = [
+              marker,
+              '### Terraform CI',
+              '| Check | Result |',
+              '| --- | --- |',
+              ...rows.map(([n, o]) => `| ${n} | ${icon(o)} ${o} |`),
+            ].join('\n');
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const prev = comments.find((c) => c.body && c.body.includes(marker));
+            if (prev) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: prev.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Fail if any check failed
+        if: steps.fmt.outcome != 'success' || steps.hclfmt.outcome != 'success' || steps.validate.outcome != 'success' || steps.test.outcome != 'success' || steps.tflint.outcome != 'success' || steps.trivy.outcome != 'success'
+        run: exit 1

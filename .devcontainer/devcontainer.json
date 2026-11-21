@@ -1,0 +1,27 @@
+{
+  "name": "gcp-terraform-web-template",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/terraform:1": {
+      "version": "1.10",
+      "tflint": "latest",
+      "terragrunt": "0.77.22"
+    },
+    "ghcr.io/dhoeric/features/google-cloud-cli:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "hashicorp.terraform",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "[terraform]": {
+          "editor.formatOnSave": true
+        }
+      }
+    }
+  },
+  "postCreateCommand": "git --version && gh --version | head -1 && gcloud --version | head -1 && terraform version | head -1 && terragrunt --version && tflint --version"
+}
