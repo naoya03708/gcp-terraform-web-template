@@ -1,6 +1,6 @@
 # 基本設計書
 
-状態: **Draft**（設計段階。実装・実機検証は未実施）
+状態: **フェーズ 1（Cloud Run 構成）実装済み・実機未検証**（GKE Autopilot は未着手）
 要件: [requirements.md](requirements.md) / 設計判断: [adr/](adr/)
 
 > 「実装時に確認」と書いた項目は、GCP の仕様・料金・プロバイダの対応状況を、実装の段階で確認してから確定する。未確認のまま断定しない。
@@ -156,14 +156,14 @@ AWS 版と同じ流れにする（[ADR 0002](adr/0002-trunk-based-development.md
 | 5 | destroy（時刻を記録）→ 残存リソースを CLI で確認（Cloud Run、Cloud SQL、VPC、Artifact Registry、Secret Manager、ログ バケット、LB、静的 IP、サービスアカウント） |
 | 6 | 請求の実績を記録し、`docs/cost.md` に追記 |
 
-AWS 版では、ALB 自身が返す 503 で擬似障害を起こした。GCP 版は、アプリが返す 5xx を使えるので、SLI の対象（Cloud Run の 5xx）を、より直接に検証できる。
+AWS 版では、ALB 自身が返す 503 で擬似障害を起こした。GCP 版は、SLI の対象（Cloud Run の 5xx）を直接に検証できる。ただし、既定のサンプルイメージ（hello）は 5xx を返せないため、擬似障害の方法（起動に失敗するイメージへの差し替えなど）は、実機で決める。
 
 ## 8. フェーズ分け
 
 | フェーズ | 内容 | 状態 |
 | --- | --- | --- |
-| 0 | 要件定義・基本設計（本書） | 作業中 |
-| 1 | Cloud Run 構成の実装（network / cloudrun / cloudsql / monitoring、CI） | 未着手 |
+| 0 | 要件定義・基本設計（本書） | 完了 |
+| 1 | Cloud Run 構成の実装（network / cloudrun / cloudsql / monitoring / armor、WIF、CI） | 実装済み（実機未検証） |
 | 2 | GKE Autopilot の追加 | 未着手 |
 | 3 | 実機検証と、実績の記録 | 未着手 |
 

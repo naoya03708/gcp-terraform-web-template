@@ -1,6 +1,6 @@
 # 0006. Workload Identity Federation で認証し、apply 用の権限は割り切る
 
-状態: Proposed
+状態: Accepted（WIF による実際の認証は実機未検証）
 
 ## 背景
 CI から GCP を操作するために、サービスアカウントの長期キーを GitHub Secrets に置くと、漏洩時の影響が大きい。AWS 版では GitHub OIDC を使ったが、検証用アカウントの組織の SCP が OIDC プロバイダの作成を拒否し、実機では未検証になった（AWS 版 ADR 0006）。
@@ -8,8 +8,9 @@ CI から GCP を操作するために、サービスアカウントの長期キ
 ## 決定
 - GitHub Actions の OIDC を信頼する Workload Identity Federation を使う。**サービスアカウントの長期キーは作らない**。
 - サービスアカウントを2つに分ける。
-  - plan 用: 閲覧権限 + state バケットの読み書き。信頼条件は、本リポジトリの `pull_request` のみ。fork からの PR には権限を渡さない。
-  - apply 用: GitHub Environment（`dev` / `prod`）のジョブのみ。権限は、デモ用途では広めにし、実運用での絞り込みを推奨する。
+  - plan 用: プロジェクトの閲覧（`roles/viewer`、`roles/iam.securityReviewer`）+ state バケットのオブジェクト操作（ロック取得のため）。信頼条件は、本リポジトリの `pull_request` のみ。fork からの PR には権限を渡さない。
+  - apply 用: GitHub Environment（`dev` / `prod`）のジョブのみ。ロールは、構成に必要なサービスの管理者ロール（Cloud Run、Cloud SQL、ネットワーク、Secret Manager、監視など）に絞り、**オーナー / エディタは付けない**。それでも広いので、実運用での絞り込みを推奨する。
+- プールのプロバイダは、`attribute_condition` で、本リポジトリのトークンだけを受け付ける。プロバイダ名・SA の値は、プロジェクト番号を含むため、リポジトリ変数ではなく **GitHub Secrets** に置く。plan の結果を PR コメントに出すときは、プロジェクト ID を伏せ字にする。
 - WIF のリソースは、別ルートモジュール（`bootstrap/wif`）で、初回のみ手動 apply する。
 
 ## 理由
@@ -18,6 +19,8 @@ CI から GCP を操作するために、サービスアカウントの長期キ
 
 ## トレードオフ
 - apply 用 SA の権限は広い。実運用では、サービス別のロールや、カスタムロールへの絞り込みを推奨する。引き受け条件を Environment に限定して、リスクを抑える。
+- plan 用 SA は、クラウドのリソースには閲覧のみだが、**state バケットを読める**。state には DB のパスワードが残る（ADR 0005）ため、plan の信頼範囲は、同じリポジトリの PR（fork 除外）に限っている。
+- **未検証**: WIF による実際の認証（plan / apply）。AWS 版と違い、GCP の検証用組織には WIF を止める制約が無いため、フェーズ 3 で実機確認できる見込み。
 - **前提確認（実施済み）**: 検証用アカウントには、Google が自動で作成した組織があり、組織レベルの Org Policy が設定されていた。設計に関わる確認結果は次のとおり。AWS 版のように、組織の統制で作成が拒否された場合は、未検証として、理由を README に記録する。
 
 | 制約 | 状態 | 影響 |
