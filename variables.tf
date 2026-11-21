@@ -139,3 +139,27 @@ variable "alarm_email" {
   type        = string
   default     = null
 }
+
+# --- 外部 HTTPS LB / Cloud Armor（任意。既定は無効） ---
+variable "enable_lb" {
+  description = "true の場合、外部 HTTPS LB を作成し、Cloud Run への入口を LB 経由のみに絞る。domain_name が必須（費用が増える）"
+  type        = bool
+  default     = false
+}
+
+variable "enable_armor" {
+  description = "true の場合、LB に Cloud Armor（WAF）をアタッチする。enable_lb が true のときだけ有効"
+  type        = bool
+  default     = true
+}
+
+variable "domain_name" {
+  description = "LB の Google 管理証明書のドメイン名。enable_lb = true のとき必須"
+  type        = string
+  default     = null
+
+  validation {
+    condition     = !var.enable_lb || var.domain_name != null
+    error_message = "enable_lb = true の場合は domain_name を指定してください（HTTPS のみ提供するため。ドメインが無い環境では有効化しないでください）。"
+  }
+}

@@ -42,3 +42,8 @@ output "dashboard_id" {
   description = "SLO ダッシュボードの ID"
   value       = module.monitoring.dashboard_id
 }
+
+output "lb_ip_address" {
+  description = "外部 LB の IP（enable_lb = false なら null）。ドメインの A レコードを向ける"
+  value       = var.enable_lb ? module.armor[0].lb_ip_address : null
+}
