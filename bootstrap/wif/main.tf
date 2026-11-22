@@ -12,9 +12,12 @@ locals {
   # Workload Identity のサブジェクトを、プロジェクト番号つきで組み立てる
   principal_base = "principal://iam.googleapis.com/projects/${data.google_project.this.number}/locations/global/workloadIdentityPools/${local.pool_id}/subject"
 
+  # sub クレームの接頭辞。リポジトリが「不変のサブジェクト」を使う場合は、変数で上書きする
+  subject_prefix = coalesce(var.github_subject_prefix, "repo:${var.github_repository}")
+
   # plan は pull_request のトークン、apply は GitHub Environment のトークンだけを受け付ける
-  plan_subject   = "repo:${var.github_repository}:pull_request"
-  apply_subjects = [for e in var.apply_environments : "repo:${var.github_repository}:environment:${e}"]
+  plan_subject   = "${local.subject_prefix}:pull_request"
+  apply_subjects = [for e in var.apply_environments : "${local.subject_prefix}:environment:${e}"]
 }
 
 resource "google_project_service" "this" {

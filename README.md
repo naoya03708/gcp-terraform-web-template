@@ -54,6 +54,8 @@ ENV=dev terragrunt destroy                 # 検証が終わったら、必ず�
    ```bash
    cd bootstrap/wif
    export TF_VAR_gcp_project_id=$GCP_PROJECT
+   # 最近作られたリポジトリは OIDC の sub が「不変のサブジェクト」形式。API の値を渡す（ADR 0006）
+   export TF_VAR_github_subject_prefix=$(gh api repos/<OWNER>/<REPO>/actions/oidc/customization/sub --jq .sub_claim_prefix)
    terraform init && terraform apply
    terraform output -raw workload_identity_provider   # 値は GitHub Secrets に登録する
    ```
