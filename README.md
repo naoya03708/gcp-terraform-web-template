@@ -2,7 +2,7 @@
 
 Google Cloud 上の Web アプリ向けインフラを、Terraform / Terragrunt で再利用できるテンプレートです。[AWS 版](https://github.com/naoya03708/aws-terraform-web-template)の GCP 版にあたります。
 
-> **状態: フェーズ 1（Cloud Run 構成）の実装が完了。実機検証は、まだ行っていません。** CI（fmt / validate / lint / セキュリティスキャン / `terraform test` 29 件）は通っていますが、実際の GCP 環境への apply は未実施です。検証していない範囲は、[下の表](#検証状況)に明記しています。
+> **状態: フェーズ 1（Cloud Run 構成）の実装が完了。実機検証は、一部のみ実施（アプリ本体の apply は未実施）。** CI（fmt / validate / lint / セキュリティスキャン / `terraform test` 29 件）は通っています。実機では、state バケットの作成、実環境に対する plan、WIF の bootstrap の apply を確認しました。検証した範囲と、していない範囲は、[下の表](#検証状況)に明記しています。
 
 ## 構成
 
@@ -66,17 +66,19 @@ ENV=dev terragrunt destroy                 # 検証が終わったら、必ず�
 
 ## 検証状況
 
-**実機（GCP）での検証は、まだ行っていません。** ここまでに確認できたのは、次の範囲です。
+**dev 環境の apply / destroy は、まだ行っていません。** ここまでに確認できたのは、次の範囲です。
 
 | 確認済み（CI / ローカル） | 内容 |
 | --- | --- |
 | 静的チェック | `terraform fmt` / `validate`、`terragrunt hcl fmt`、tflint（google ルールセット）、trivy、actionlint |
 | 単体テスト | `terraform test` 29 件（モックプロバイダ）。dev / prod の差、不正値の拒否、任意機能のフラグなど |
+| 実機: state バケット | `terragrunt plan` で、state 用の GCS バケットが自動作成された。東京、均一なバケットレベルのアクセス、バージョニング有効（Terragrunt 0.77.22）。ADR 0001 |
+| 実機: plan | 実プロジェクトに対する `terragrunt plan`（dev）が、37 リソースの追加として成功（provider の引数エラーなし。リソースは作成していない） |
+| 実機: WIF の bootstrap | `bootstrap/wif` の apply が成功（25 リソース）。組織ポリシーに阻まれずに、WIF のプール・プロバイダ・SA を作成できた。**CI からの認証そのものは、次の項目で確認する** |
 
 | 未検証（実機で確認が要る） | 理由・備考 |
 | --- | --- |
 | apply / destroy 全体、HTTPS での応答 | 未実施（フェーズ 3） |
-| Terragrunt 0.77.22 での GCS バケットの自動作成と `enable_bucket_policy_only` | 参照した公式ドキュメントが 1.x 系（ADR 0001） |
 | Service Networking 接続の destroy | 「producer が使用中」で失敗する報告がある（ADR 0005） |
 | Cloud SQL の tier（dev: `db-f1-micro`、prod: `db-custom-1-3840`） | 利用可否を、実機で確認する |
 | SLO のフィルタ、長窓 ∧ 短窓の AND のバーンレートのアラートの発火と復旧 | 公式の例に無い書き方（ADR 0003） |
