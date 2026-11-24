@@ -88,9 +88,10 @@ resource "google_monitoring_slo" "latency" {
 resource "google_monitoring_alert_policy" "availability_fast_burn" {
   display_name = "${var.name} availability fast burn (page)"
   combiner     = "AND"
+  severity     = "CRITICAL"
 
   conditions {
-    display_name = "burn rate > 14.4 (1h)"
+    display_name = "[page] burn rate > 14.4 (1h)"
 
     condition_threshold {
       filter          = "select_slo_burn_rate(\"${google_monitoring_slo.availability.name}\", \"1h\")"
@@ -101,7 +102,7 @@ resource "google_monitoring_alert_policy" "availability_fast_burn" {
   }
 
   conditions {
-    display_name = "burn rate > 14.4 (5m)"
+    display_name = "[page] burn rate > 14.4 (5m)"
 
     condition_threshold {
       filter          = "select_slo_burn_rate(\"${google_monitoring_slo.availability.name}\", \"5m\")"
@@ -122,9 +123,10 @@ resource "google_monitoring_alert_policy" "availability_fast_burn" {
 resource "google_monitoring_alert_policy" "availability_slow_burn" {
   display_name = "${var.name} availability slow burn (ticket)"
   combiner     = "AND"
+  severity     = "WARNING"
 
   conditions {
-    display_name = "burn rate > 6 (6h)"
+    display_name = "[ticket] burn rate > 6 (6h)"
 
     condition_threshold {
       filter          = "select_slo_burn_rate(\"${google_monitoring_slo.availability.name}\", \"6h\")"
@@ -135,7 +137,7 @@ resource "google_monitoring_alert_policy" "availability_slow_burn" {
   }
 
   conditions {
-    display_name = "burn rate > 6 (30m)"
+    display_name = "[ticket] burn rate > 6 (30m)"
 
     condition_threshold {
       filter          = "select_slo_burn_rate(\"${google_monitoring_slo.availability.name}\", \"30m\")"
@@ -156,9 +158,10 @@ resource "google_monitoring_alert_policy" "availability_slow_burn" {
 resource "google_monitoring_alert_policy" "latency_fast_burn" {
   display_name = "${var.name} latency fast burn (page)"
   combiner     = "AND"
+  severity     = "CRITICAL"
 
   conditions {
-    display_name = "burn rate > 14.4 (1h)"
+    display_name = "[page] burn rate > 14.4 (1h)"
 
     condition_threshold {
       filter          = "select_slo_burn_rate(\"${google_monitoring_slo.latency.name}\", \"1h\")"
@@ -169,7 +172,7 @@ resource "google_monitoring_alert_policy" "latency_fast_burn" {
   }
 
   conditions {
-    display_name = "burn rate > 14.4 (5m)"
+    display_name = "[page] burn rate > 14.4 (5m)"
 
     condition_threshold {
       filter          = "select_slo_burn_rate(\"${google_monitoring_slo.latency.name}\", \"5m\")"
@@ -190,9 +193,10 @@ resource "google_monitoring_alert_policy" "latency_fast_burn" {
 resource "google_monitoring_alert_policy" "latency_slow_burn" {
   display_name = "${var.name} latency slow burn (ticket)"
   combiner     = "AND"
+  severity     = "WARNING"
 
   conditions {
-    display_name = "burn rate > 6 (6h)"
+    display_name = "[ticket] burn rate > 6 (6h)"
 
     condition_threshold {
       filter          = "select_slo_burn_rate(\"${google_monitoring_slo.latency.name}\", \"6h\")"
@@ -203,7 +207,7 @@ resource "google_monitoring_alert_policy" "latency_slow_burn" {
   }
 
   conditions {
-    display_name = "burn rate > 6 (30m)"
+    display_name = "[ticket] burn rate > 6 (30m)"
 
     condition_threshold {
       filter          = "select_slo_burn_rate(\"${google_monitoring_slo.latency.name}\", \"30m\")"
@@ -225,9 +229,10 @@ resource "google_monitoring_alert_policy" "latency_slow_burn" {
 resource "google_monitoring_alert_policy" "db_disk" {
   display_name = "${var.name} Cloud SQL disk utilization (ticket)"
   combiner     = "OR"
+  severity     = "WARNING"
 
   conditions {
-    display_name = "disk utilization > ${var.db_disk_utilization_threshold * 100}%"
+    display_name = "[ticket] disk utilization > ${var.db_disk_utilization_threshold * 100}%"
 
     condition_threshold {
       filter          = "metric.type=\"cloudsql.googleapis.com/database/disk/utilization\" resource.type=\"cloudsql_database\" resource.labels.database_id=\"${var.project_id}:${var.db_instance_name}\""
