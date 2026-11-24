@@ -2,7 +2,7 @@
 
 Google Cloud 上の Web アプリ向けインフラを、Terraform / Terragrunt で再利用できるテンプレートです。[AWS 版](https://github.com/naoya03708/aws-terraform-web-template)の GCP 版にあたります。
 
-> **状態: フェーズ 1（Cloud Run 構成）の実装が完了。実機検証は、一部のみ実施（アプリ本体の apply は未実施）。** CI（fmt / validate / lint / セキュリティスキャン / `terraform test` 29 件）は通っています。実機では、state バケットの作成、実環境に対する plan、WIF の bootstrap の apply を確認しました。検証した範囲と、していない範囲は、[下の表](#検証状況)に明記しています。
+> **状態: フェーズ 1（Cloud Run 構成）の実装が完了。実機検証は、一部のみ実施（アプリ本体の apply は未実施）。** CI（fmt / validate / lint / セキュリティスキャン / `terraform test` 29 件）は通っています。実機では、state バケットの作成、実環境に対する plan、WIF の bootstrap の apply、**PR の plan による CI の WIF 認証**を確認しました。検証した範囲と、していない範囲は、[下の表](#検証状況)に明記しています。
 
 ## 構成
 
@@ -74,7 +74,14 @@ ENV=dev terragrunt destroy                 # 検証が終わったら、必ず�
 | 単体テスト | `terraform test` 29 件（モックプロバイダ）。dev / prod の差、不正値の拒否、任意機能のフラグなど |
 | 実機: state バケット | `terragrunt plan` で、state 用の GCS バケットが自動作成された。東京、均一なバケットレベルのアクセス、バージョニング有効（Terragrunt 0.77.22）。ADR 0001 |
 | 実機: plan | 実プロジェクトに対する `terragrunt plan`（dev）が、37 リソースの追加として成功（provider の引数エラーなし。リソースは作成していない） |
-| 実機: WIF の bootstrap | `bootstrap/wif` の apply が成功（25 リソース）。組織ポリシーに阻まれずに、WIF のプール・プロバイダ・SA を作成できた。**CI からの認証そのものは、次の項目で確認する** |
+| 実機: WIF の bootstrap | `bootstrap/wif` の apply が成功（25 リソース）。組織ポリシーに阻まれずに、WIF のプール・プロバイダ・SA を作成できた |
+| 実機: CI の WIF 認証（plan） | PR の `terraform-plan`（dev / prod）が、キーなしの認証で成功し、plan 結果が PR コメントに出た（CI では `alarm_email` が未設定のため、35 リソース）。コメントに、プロジェクト ID・番号・メールが出ていないことも確認した。**apply 用 SA（Environment 経由）での認証は未確認** |
+
+実機で見つかった問題と、わかったこと:
+
+- **OIDC の `sub` が「不変のサブジェクト」形式**（`repo:OWNER@<id>/REPO@<id>:…`）で、従来形式の紐づけだと権限借用が拒否された。`github_subject_prefix` で対応（ADR 0006）。モックのテストでは見つからなかった。
+- **IAM の紐づけを作り直した直後は、反映が遅れる**ことがある。同時に走った prod の plan だけが、1 回目に失敗し、再実行で成功した。
+- Terragrunt は、バケットの存在確認が失敗すると、「バケットが無い」とみなして**作成を試みる**。plan 用 SA には作成権限が無いため、権限の問題でも「bucket 作成の 403」というエラーになり、原因が分かりにくい（最初のエラーを見る）。
 
 | 未検証（実機で確認が要る） | 理由・備考 |
 | --- | --- |
@@ -83,7 +90,7 @@ ENV=dev terragrunt destroy                 # 検証が終わったら、必ず�
 | Cloud SQL の tier（dev: `db-f1-micro`、prod: `db-custom-1-3840`） | 利用可否を、実機で確認する |
 | SLO のフィルタ、長窓 ∧ 短窓の AND のバーンレートのアラートの発火と復旧 | 公式の例に無い書き方（ADR 0003） |
 | ダッシュボードのタイル | 単体テストで検証できない。AWS 版では、実機でしか見つからない不具合があった |
-| Workload Identity Federation による CI の認証 | 検証用組織に WIF を止める制約は無いため、実機で確認できる見込み（ADR 0006） |
+| apply 用 SA（GitHub Environment 経由）での WIF 認証、main→dev の自動デプロイ | Environment の作成と、dev の apply の際に確認する（ADR 0006） |
 | 外部 HTTPS LB と Cloud Armor | ドメインを持っていないため、**実機検証の予定なし** |
 | prod 環境、メール通知 | 実機で未確認 |
 
