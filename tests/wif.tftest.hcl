@@ -91,6 +91,28 @@ run "apply_sa_is_limited_to_environments" {
   }
 }
 
+run "immutable_subject_prefix_is_used_when_given" {
+  command = plan
+
+  module {
+    source = "./bootstrap/wif"
+  }
+
+  variables {
+    github_subject_prefix = "repo:owner@1/repo@2"
+  }
+
+  assert {
+    condition     = endswith(google_service_account_iam_member.plan_wif.member, "/subject/repo:owner@1/repo@2:pull_request")
+    error_message = "不変のサブジェクトの接頭辞を指定したら、plan 用 SA の信頼条件に使うこと"
+  }
+
+  assert {
+    condition     = alltrue([for m in google_service_account_iam_member.apply_wif : strcontains(m.member, "/subject/repo:owner@1/repo@2:environment:")])
+    error_message = "apply 用 SA の信頼条件にも、同じ接頭辞を使うこと"
+  }
+}
+
 run "rejects_malformed_repository" {
   command = plan
 

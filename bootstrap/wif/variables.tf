@@ -14,6 +14,17 @@ variable "github_repository" {
   }
 }
 
+variable "github_subject_prefix" {
+  description = <<-EOT
+    GitHub の OIDC トークンの sub クレームの接頭辞。未指定なら `repo:OWNER/REPO`（従来の形式）。
+    最近作られたリポジトリは「不変のサブジェクト」が既定で、sub が `repo:OWNER@<オーナー ID>/REPO@<リポジトリ ID>:...` の形になる。
+    その場合は、次のコマンドの値を指定する（指定しないと、権限借用が拒否される）:
+      gh api repos/OWNER/REPO/actions/oidc/customization/sub --jq .sub_claim_prefix
+  EOT
+  type        = string
+  default     = null
+}
+
 variable "apply_environments" {
   description = "apply を許可する GitHub Environment 名（Environment 単位で信頼する）"
   type        = list(string)

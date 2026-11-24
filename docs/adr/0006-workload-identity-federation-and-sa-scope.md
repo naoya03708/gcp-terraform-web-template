@@ -10,6 +10,7 @@ CI から GCP を操作するために、サービスアカウントの長期キ
 - サービスアカウントを2つに分ける。
   - plan 用: プロジェクトの閲覧（`roles/viewer`、`roles/iam.securityReviewer`）+ state バケットのオブジェクト操作（ロック取得のため）。信頼条件は、本リポジトリの `pull_request` のみ。fork からの PR には権限を渡さない。
   - apply 用: GitHub Environment（`dev` / `prod`）のジョブのみ。ロールは、構成に必要なサービスの管理者ロール（Cloud Run、Cloud SQL、ネットワーク、Secret Manager、監視など）に絞り、**オーナー / エディタは付けない**。それでも広いので、実運用での絞り込みを推奨する。
+- **GitHub の OIDC の `sub` の形式に注意する（実機で見つかった不具合）**: 最近作られたリポジトリは、`sub` が「不変のサブジェクト」形式（`repo:OWNER@<オーナー ID>/REPO@<リポジトリ ID>:pull_request`）になる。従来形式（`repo:OWNER/REPO:pull_request`）の紐づけだと、STS のトークン交換は通るが、サービスアカウントの権限借用が `iam.serviceAccounts.getAccessToken` で拒否される。`bootstrap/wif` は、変数 `github_subject_prefix`（既定は従来形式）で切り替え、値は `gh api repos/OWNER/REPO/actions/oidc/customization/sub --jq .sub_claim_prefix` で取得する。プロバイダの `attribute_condition`（`assertion.repository`）は、影響を受けない。
 - プールのプロバイダは、`attribute_condition` で、本リポジトリのトークンだけを受け付ける。プロバイダ名・SA の値は、プロジェクト番号を含むため、リポジトリ変数ではなく **GitHub Secrets** に置く。plan の結果を PR コメントに出すときは、プロジェクト ID を伏せ字にする。
 - WIF のリソースは、別ルートモジュール（`bootstrap/wif`）で、初回のみ手動 apply する。
 
