@@ -19,6 +19,7 @@ locals {
 }
 
 # GCS バケットが無ければ Terragrunt が作成する（バージョニング有効）。
+# Terragrunt 0.77.22 で、実機（東京、均一なバケットレベルのアクセス、バージョニング有効）の作成を確認済み（ADR 0001）。
 # 組織ポリシー storage.uniformBucketLevelAccess に合わせ、均一なバケットレベルのアクセスで作る。
 # ロックは GCS バックエンドが自動で行う。
 remote_state {
