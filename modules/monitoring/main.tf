@@ -256,6 +256,7 @@ resource "google_monitoring_alert_policy" "db_disk" {
 }
 
 # --- ダッシュボード（上段: SLO、下段: 原因調査用） ---
+# API が返す形（0 の位置指定は省略、targetAxis は Y1 が補われる）に合わせて書く。合わせないと、plan のたびに差分が出る。
 # タイルの定義は単体テストで検証できない（AWS 版で実機でしか見つからない不具合があった）。実機で確認する。
 resource "google_monitoring_dashboard" "this" {
   dashboard_json = jsonencode({
@@ -264,8 +265,6 @@ resource "google_monitoring_dashboard" "this" {
       columns = 12
       tiles = [
         {
-          xPos   = 0
-          yPos   = 0
           width  = 6
           height = 3
           widget = {
@@ -281,7 +280,6 @@ resource "google_monitoring_dashboard" "this" {
         },
         {
           xPos   = 6
-          yPos   = 0
           width  = 6
           height = 3
           widget = {
@@ -296,7 +294,6 @@ resource "google_monitoring_dashboard" "this" {
           }
         },
         {
-          xPos   = 0
           yPos   = 3
           width  = 6
           height = 4
@@ -304,7 +301,8 @@ resource "google_monitoring_dashboard" "this" {
             title = "Availability error budget remaining"
             xyChart = {
               dataSets = [{
-                plotType = "LINE"
+                plotType   = "LINE"
+                targetAxis = "Y1"
                 timeSeriesQuery = {
                   timeSeriesFilter = {
                     filter = "select_slo_budget_fraction(\"${google_monitoring_slo.availability.name}\")"
@@ -323,7 +321,8 @@ resource "google_monitoring_dashboard" "this" {
             title = "Latency error budget remaining"
             xyChart = {
               dataSets = [{
-                plotType = "LINE"
+                plotType   = "LINE"
+                targetAxis = "Y1"
                 timeSeriesQuery = {
                   timeSeriesFilter = {
                     filter = "select_slo_budget_fraction(\"${google_monitoring_slo.latency.name}\")"
@@ -334,7 +333,6 @@ resource "google_monitoring_dashboard" "this" {
           }
         },
         {
-          xPos   = 0
           yPos   = 7
           width  = 6
           height = 4
@@ -342,7 +340,8 @@ resource "google_monitoring_dashboard" "this" {
             title = "Requests by response class"
             xyChart = {
               dataSets = [{
-                plotType = "STACKED_BAR"
+                plotType   = "STACKED_BAR"
+                targetAxis = "Y1"
                 timeSeriesQuery = {
                   timeSeriesFilter = {
                     filter = local.total_filter
@@ -367,7 +366,8 @@ resource "google_monitoring_dashboard" "this" {
             title = "Request latency p95 (ms)"
             xyChart = {
               dataSets = [{
-                plotType = "LINE"
+                plotType   = "LINE"
+                targetAxis = "Y1"
                 timeSeriesQuery = {
                   timeSeriesFilter = {
                     filter = local.latency_filter
@@ -383,7 +383,6 @@ resource "google_monitoring_dashboard" "this" {
           }
         },
         {
-          xPos   = 0
           yPos   = 11
           width  = 6
           height = 4
@@ -391,7 +390,8 @@ resource "google_monitoring_dashboard" "this" {
             title = "Cloud Run instance count"
             xyChart = {
               dataSets = [{
-                plotType = "LINE"
+                plotType   = "LINE"
+                targetAxis = "Y1"
                 timeSeriesQuery = {
                   timeSeriesFilter = {
                     filter = "metric.type=\"run.googleapis.com/container/instance_count\" ${local.run_resource}"
@@ -415,7 +415,8 @@ resource "google_monitoring_dashboard" "this" {
             title = "Cloud SQL disk utilization"
             xyChart = {
               dataSets = [{
-                plotType = "LINE"
+                plotType   = "LINE"
+                targetAxis = "Y1"
                 timeSeriesQuery = {
                   timeSeriesFilter = {
                     filter = "metric.type=\"cloudsql.googleapis.com/database/disk/utilization\" resource.type=\"cloudsql_database\" resource.labels.database_id=\"${var.project_id}:${var.db_instance_name}\""
