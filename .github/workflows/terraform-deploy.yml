@@ -38,6 +38,13 @@ jobs:
         run: |
           if [ -n "$GCP_PROJECT" ] && [ -n "$WIF_PROVIDER" ] && [ -n "$APPLY_SA" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
+            # プロジェクト番号（WIF プロバイダの値に含まれる）は、以降のログでも伏せ字にする。
+            # Secrets に登録した値は自動で伏せ字になるが、番号は別の文字列なので、ここで登録する。
+            NUM="$(printf '%s' "$WIF_PROVIDER" | sed -nE 's#^projects/([0-9]+)/.*#\1#p')"
+            if [ -n "$NUM" ]; then
+              echo "::add-mask::$NUM"
+              echo "GCP_PROJECT_NUMBER=$NUM" >> "$GITHUB_ENV"
+            fi
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
             echo "::notice::GCP の Secrets が未設定のため、apply をスキップします。"
@@ -79,6 +86,13 @@ jobs:
         run: |
           if [ -n "$GCP_PROJECT" ] && [ -n "$WIF_PROVIDER" ] && [ -n "$APPLY_SA" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
+            # プロジェクト番号（WIF プロバイダの値に含まれる）は、以降のログでも伏せ字にする。
+            # Secrets に登録した値は自動で伏せ字になるが、番号は別の文字列なので、ここで登録する。
+            NUM="$(printf '%s' "$WIF_PROVIDER" | sed -nE 's#^projects/([0-9]+)/.*#\1#p')"
+            if [ -n "$NUM" ]; then
+              echo "::add-mask::$NUM"
+              echo "GCP_PROJECT_NUMBER=$NUM" >> "$GITHUB_ENV"
+            fi
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
             echo "::notice::GCP の Secrets が未設定のため、apply をスキップします。"
