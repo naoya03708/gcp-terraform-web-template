@@ -34,6 +34,7 @@ jobs:
         id: gate
         env:
           WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER }}
+          ALARM_EMAIL: ${{ secrets.ALARM_EMAIL }}
           APPLY_SA: ${{ secrets.GCP_APPLY_SA }}
         run: |
           if [ -n "$GCP_PROJECT" ] && [ -n "$WIF_PROVIDER" ] && [ -n "$APPLY_SA" ]; then
@@ -44,6 +45,11 @@ jobs:
             if [ -n "$NUM" ]; then
               echo "::add-mask::$NUM"
               echo "GCP_PROJECT_NUMBER=$NUM" >> "$GITHUB_ENV"
+            fi
+            # 通知先メール（任意の Secrets）。設定されていれば、手元の apply と同じく Terraform に渡す。
+            # 未設定のまま渡さないと、通知チャネルを「削除する」差分が毎回出てしまう。
+            if [ -n "$ALARM_EMAIL" ]; then
+              echo "TF_VAR_alarm_email=$ALARM_EMAIL" >> "$GITHUB_ENV"
             fi
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
@@ -82,6 +88,7 @@ jobs:
         id: gate
         env:
           WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER }}
+          ALARM_EMAIL: ${{ secrets.ALARM_EMAIL }}
           APPLY_SA: ${{ secrets.GCP_APPLY_SA }}
         run: |
           if [ -n "$GCP_PROJECT" ] && [ -n "$WIF_PROVIDER" ] && [ -n "$APPLY_SA" ]; then
@@ -92,6 +99,11 @@ jobs:
             if [ -n "$NUM" ]; then
               echo "::add-mask::$NUM"
               echo "GCP_PROJECT_NUMBER=$NUM" >> "$GITHUB_ENV"
+            fi
+            # 通知先メール（任意の Secrets）。設定されていれば、手元の apply と同じく Terraform に渡す。
+            # 未設定のまま渡さないと、通知チャネルを「削除する」差分が毎回出てしまう。
+            if [ -n "$ALARM_EMAIL" ]; then
+              echo "TF_VAR_alarm_email=$ALARM_EMAIL" >> "$GITHUB_ENV"
             fi
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"

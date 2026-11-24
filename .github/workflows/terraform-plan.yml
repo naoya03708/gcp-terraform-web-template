@@ -41,6 +41,7 @@ jobs:
         id: gate
         env:
           WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER }}
+          ALARM_EMAIL: ${{ secrets.ALARM_EMAIL }}
           PLAN_SA: ${{ secrets.GCP_PLAN_SA }}
         run: |
           if [ -n "$GCP_PROJECT" ] && [ -n "$WIF_PROVIDER" ] && [ -n "$PLAN_SA" ]; then
@@ -51,6 +52,11 @@ jobs:
             if [ -n "$NUM" ]; then
               echo "::add-mask::$NUM"
               echo "GCP_PROJECT_NUMBER=$NUM" >> "$GITHUB_ENV"
+            fi
+            # 通知先メール（任意の Secrets）。設定されていれば、手元の apply と同じく Terraform に渡す。
+            # 未設定のまま渡さないと、通知チャネルを「削除する」差分が毎回出てしまう。
+            if [ -n "$ALARM_EMAIL" ]; then
+              echo "TF_VAR_alarm_email=$ALARM_EMAIL" >> "$GITHUB_ENV"
             fi
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
@@ -89,7 +95,7 @@ jobs:
             const env = process.env.ENV_NAME;
             let out = fs.existsSync('plan.txt') ? fs.readFileSync('plan.txt', 'utf8') : '(no output)';
             // 公開リポジトリのコメントにプロジェクト ID・番号を出さない
-            for (const secret of [process.env.GCP_PROJECT, process.env.GCP_PROJECT_NUMBER]) {
+            for (const secret of [process.env.GCP_PROJECT, process.env.GCP_PROJECT_NUMBER, process.env.TF_VAR_alarm_email]) {
               if (secret) out = out.split(secret).join('***');
             }
             // 保険: projects/<数字> の形は、番号とみなして伏せ字にする
