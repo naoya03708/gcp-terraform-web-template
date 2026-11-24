@@ -59,7 +59,7 @@ ENV=dev terragrunt destroy                 # 検証が終わったら、必ず�
    terraform init && terraform apply
    terraform output -raw workload_identity_provider   # 値は GitHub Secrets に登録する
    ```
-2. GitHub Secrets に、`GCP_PROJECT`、`GCP_WIF_PROVIDER`、`GCP_PLAN_SA`、`GCP_APPLY_SA` を登録します（公開リポジトリのログに、プロジェクト番号を出さないため、変数ではなく Secrets に置きます）。
+2. GitHub Secrets に、`GCP_PROJECT`、`GCP_WIF_PROVIDER`、`GCP_PLAN_SA`、`GCP_APPLY_SA` を登録します。**アラームの通知先を CI でも使うなら、`ALARM_EMAIL` も登録します**（任意。未登録だと CI の plan / apply は通知チャネルを作らず、手元で作った場合は、削除の差分が出ます）（公開リポジトリのログに、プロジェクト番号を出さないため、変数ではなく Secrets に置きます）。
 3. GitHub Environment（`dev`、`prod`）を作ります。`prod` には、必須レビュアーを設定します。
 4. 最初の `terragrunt apply`（state バケットの作成）の後に、`TF_VAR_state_bucket=<バケット名>` を付けて、`bootstrap/wif` を再 apply します。plan 用 SA が、state のロックを取れるようになります。
 5. main への自動 apply（dev）を有効にするときは、リポジトリ変数 `AUTO_DEPLOY_DEV=true` を設定します（誤課金を防ぐため、既定は無効）。
