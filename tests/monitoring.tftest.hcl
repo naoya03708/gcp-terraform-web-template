@@ -85,6 +85,21 @@ run "burn_rate_policies" {
     error_message = "バーンレートの閾値が、緊急 14.4・チケット 6 であること"
   }
 
+  assert {
+    condition     = google_monitoring_alert_policy.availability_fast_burn.severity == "CRITICAL" && google_monitoring_alert_policy.latency_fast_burn.severity == "CRITICAL"
+    error_message = "緊急（fast burn）のアラートの重大度が CRITICAL であること"
+  }
+
+  assert {
+    condition     = google_monitoring_alert_policy.availability_slow_burn.severity == "WARNING" && google_monitoring_alert_policy.latency_slow_burn.severity == "WARNING" && google_monitoring_alert_policy.db_disk.severity == "WARNING"
+    error_message = "チケット（slow burn、DB ディスク）のアラートの重大度が WARNING であること"
+  }
+
+  assert {
+    condition     = alltrue([for c in google_monitoring_alert_policy.availability_fast_burn.conditions : startswith(c.display_name, "[page] ")]) && alltrue([for c in google_monitoring_alert_policy.availability_slow_burn.conditions : startswith(c.display_name, "[ticket] ")])
+    error_message = "通知の件名で区別できるよう、条件名に [page] / [ticket] を付けること"
+  }
+
   # フィルタ（select_slo_burn_rate）は SLO の name（apply 後に確定）を含むため、plan のテストでは検証できない。実機で確認する。
 
   assert {
