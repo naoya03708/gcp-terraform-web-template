@@ -49,14 +49,19 @@ ENV=dev terragrunt destroy                 # 検証が終わったら、必ず�
 
 ### destroy の注意
 
-`ENV=dev terragrunt destroy` は、**一度で完了しないことがあります**（実機で確認）。Cloud SQL と Cloud Run は、最初の実行で削除されます。残りは、次のとおりです。
+`ENV=dev terragrunt destroy` は、**一度で完了しないことがあります**（実機で確認）。Cloud SQL と Cloud Run は、最初の実行で削除されます。残りは、次のとおりです。いずれも、公式ドキュメントに根拠があります。
 
-| 症状 | 原因と対処 |
-| --- | --- |
-| サブネットの削除が `already being used by …serverless-ipv4-cloudrun-…` で失敗 | Cloud Run（Direct VPC egress）が残した内部アドレスの予約が、サービスの削除後もしばらく残る。**時間を置いて**再実行する（今回は、9 時間以内に消えた。App Engine の記載では 1〜2 時間） |
-| Service Networking の接続が `Producer services … are still using this connection` で失敗 | Cloud SQL を削除した後も、9 時間以上、削除できなかった。**Terraform の削除の順序の問題ではない**（`module.cloudsql` は `module.network` に依存し、Cloud SQL が先に消えた状態で、接続の削除に失敗した）。**Compute 側の peering を直接削除**してから、再実行する: `gcloud compute networks peerings delete servicenetworking-googleapis-com --network=<VPC 名>`（今回は、これで残り全部が削除できた） |
+| 症状 | 原因と、待ち時間の上限 | 対処 |
+| --- | --- | --- |
+| サブネットの削除が `already being used by …serverless-ipv4-cloudrun-…` で失敗 | Cloud Run が、サービスの削除後に、IP アドレスを解放するまでの待ち。公式は「**1〜2 時間**待つ」（[Direct VPC egress](https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc)）。今回は、9 時間以内に消えた | 2 時間以上あけて、再実行する |
+| Service Networking の接続が `…are still using this connection` で失敗 | Cloud SQL の削除は、成功を返しても、**プロデューサー側のリソースは、4 日後に削除**される。その間、接続は削除できない（公式: "the service waits for four days before deleting the service producer resources"、"If you try to delete the connection during the waiting period, the deletion fails"。[Configure private services access](https://docs.cloud.google.com/vpc/docs/configure-private-services-access) の「Delete a private connection」）。**最大 4 日** | 下の「選択肢」 |
 
-destroy 後は、Secret Manager、サービスアカウント、Artifact Registry、ログ バケット、LB、静的 IP、予約アドレスが残っていないかを、確認してください。残っていると、課金や、再作成時の衝突の原因になります。残る課金の要因は、ほぼありません（state 用の GCS バケットと、`bootstrap/wif` は、意図して残します）。
+**接続の削除が詰まった場合の選択肢**
+
+1. **4 日待って、再実行する**（公式の手順に沿う。ただし、VPC とアドレスの予約が、その間残る。いずれも、ほぼ無料）。
+2. **Compute 側の peering を直接削除してから、再実行する**: `gcloud compute networks peerings delete servicenetworking-googleapis-com --network=<VPC 名>`。今回は、これで残り全部が削除できた（Cloud SQL の削除から約 9 時間後）。**ただし、公式は「Don't attempt to delete a private connection by deleting its associated VPC Network Peering connection directly」と、この方法を勧めていない**。Cloud SQL の削除済みの dev で、残るものが無いことを確認して使う、という位置づけにする（prod や、他のサービスが接続を使っている環境では使わない。その副作用は、未確認）。
+
+destroy 後は、Secret Manager、サービスアカウント、Artifact Registry、ログ バケット、LB、静的 IP、予約アドレスが残っていないかを、確認してください。残る課金の要因は、ほぼありません（state 用の GCS バケットと、`bootstrap/wif` は、意図して残します）。
 
 ### CI の設定（Workload Identity Federation）
 
