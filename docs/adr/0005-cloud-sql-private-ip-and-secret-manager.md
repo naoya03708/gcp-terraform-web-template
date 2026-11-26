@@ -1,6 +1,6 @@
 # 0005. Cloud SQL は private IP のみとし、秘密情報は Secret Manager に置く
 
-状態: Accepted（Service Networking の destroy の挙動などは実機未検証）
+状態: Accepted（dev の apply / destroy は実機で確認済み。destroy は一度で完了せず、手動の対応が要る）
 
 ## 背景
 DB をインターネットに公開せず、パスワードを、コード・変数・ログに平文で残さずに扱いたい。AWS 版では、RDS の `manage_master_user_password` で、パスワードを state にも残さなかった（AWS 版 ADR 0005）。また、NAT Gateway がコストの最大項目だった（AWS 版 ADR 0004）。
@@ -18,5 +18,6 @@ DB をインターネットに公開せず、パスワードを、コード・�
 
 ## トレードオフ
 - (a) は、**パスワードが Terraform の state に残る**（AWS 版より弱い）。state バケットのアクセス制御と暗号化（Google 管理の鍵）で緩和し、README に明記する。plan 用 SA も、state の読み取りができる点に注意する（ADR 0006）。(b) は、アプリ側の対応が要るため採用しなかった。
-- **未検証**: Service Networking の接続は、destroy のときに「producer が使用中」で失敗することがあると報告されている。実機で挙動を確認し、必要なら再実行の手順を README に書く（フェーズ 3）。tier（dev: `db-f1-micro`、prod: `db-custom-1-3840`）の利用可否も、実機で確認する。
+- **実機で確認済み**（2026-11-24）: dev（`db-f1-micro`、ZONAL）の apply は、Service Networking を含め、一度で成功した（約 13 分）。**destroy は、一度では完了しなかった**: (1) Cloud Run の `serverless-ipv4-…` の予約が残り、サブネットを削除できない（9 時間以内に解消）。(2) Service Networking の接続が、Cloud SQL の削除後も、9 時間以上、`Producer services … still using` で削除できない。Terraform の削除の順序は、正しかった（`module.cloudsql` は `module.network` に依存し、失敗した時点で、state に Cloud SQL は無く、`gcloud sql instances list` も 0 件）。原因は、公式に書かれた**待ち期間**である: Cloud SQL を削除すると、成功は即座に返るが、プロデューサー側のリソースは、**4 日後**に削除され、その間は接続を削除できない（[Configure private services access](https://docs.cloud.google.com/vpc/docs/configure-private-services-access)）。したがって、待ち時間の上限は**最大 4 日**。Compute 側の peering を直接削除する回避策は、公式が勧めていない方法で（"Don't attempt to delete a private connection by deleting its associated VPC Network Peering connection directly"）、dev で 1 回成功しただけである。運用上は、「4 日待つ」を基本とし、直接削除は、Cloud SQL が削除済みの dev に限る。Compute 側の peering（`servicenetworking-googleapis-com`）を直接削除し、`destroy` を再実行すると、残りが全部削除できた。手順は README の「destroy の注意」。
+- **未検証**: prod の tier（`db-custom-1-3840`）と REGIONAL の構成。provider の `deletion_policy = "ABANDON"`（接続を削除せずに state から外す）は、試していない。
 - private IP のため、手元からの直接接続には、踏み台や Cloud SQL Auth Proxy 等が要る。

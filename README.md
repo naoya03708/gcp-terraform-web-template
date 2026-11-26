@@ -2,7 +2,7 @@
 
 Google Cloud 上の Web アプリ向けインフラを、Terraform / Terragrunt で再利用できるテンプレートです。[AWS 版](https://github.com/naoya03708/aws-terraform-web-template)の GCP 版にあたります。
 
-> **状態: フェーズ 1（Cloud Run 構成）の実装が完了。実機検証は、一部のみ実施（アプリ本体の apply は未実施）。** CI（fmt / validate / lint / セキュリティスキャン / `terraform test` 29 件）は通っています。実機では、state バケットの作成、実環境に対する plan、WIF の bootstrap の apply、**PR の plan による CI の WIF 認証**を確認しました。検証した範囲と、していない範囲は、[下の表](#検証状況)に明記しています。
+> **状態: フェーズ 1（Cloud Run 構成）の実装が完了し、dev を実環境で検証済み（2026-11-24）。** apply、HTTPS、擬似障害でのバーンレートのアラートの発火と復旧、ダッシュボード、CI の WIF 認証と apply、destroy まで確認しました。**prod、外部 LB と Cloud Armor、CI でゼロからの構築は、未検証です。** 検証した範囲と、していない範囲、実機で見つかった問題は、[下の表](#検証状況)に書いています。
 
 ## 構成
 
@@ -47,6 +47,22 @@ ENV=dev terragrunt destroy                 # 検証が終わったら、必ず�
 - 環境の差分は、`dev.tfvars` / `prod.tfvars` だけです。
 - prod は、CI の承認ゲート（タグ `v*` と GitHub Environment）で apply する想定です。
 
+### destroy の注意
+
+`ENV=dev terragrunt destroy` は、**一度で完了しないことがあります**（実機で確認）。Cloud SQL と Cloud Run は、最初の実行で削除されます。残りは、次のとおりです。いずれも、公式ドキュメントに根拠があります。
+
+| 症状 | 原因と、待ち時間の上限 | 対処 |
+| --- | --- | --- |
+| サブネットの削除が `already being used by …serverless-ipv4-cloudrun-…` で失敗 | Cloud Run が、サービスの削除後に、IP アドレスを解放するまでの待ち。公式は「**1〜2 時間**待つ」（[Direct VPC egress](https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc)）。今回は、9 時間以内に消えた | 2 時間以上あけて、再実行する |
+| Service Networking の接続が `…are still using this connection` で失敗 | Cloud SQL の削除は、成功を返しても、**プロデューサー側のリソースは、4 日後に削除**される。その間、接続は削除できない（公式: "the service waits for four days before deleting the service producer resources"、"If you try to delete the connection during the waiting period, the deletion fails"。[Configure private services access](https://docs.cloud.google.com/vpc/docs/configure-private-services-access) の「Delete a private connection」）。**最大 4 日** | 下の「選択肢」 |
+
+**接続の削除が詰まった場合の選択肢**
+
+1. **4 日待って、再実行する**（公式の手順に沿う。ただし、VPC とアドレスの予約が、その間残る。いずれも、ほぼ無料）。
+2. **Compute 側の peering を直接削除してから、再実行する**: `gcloud compute networks peerings delete servicenetworking-googleapis-com --network=<VPC 名>`。今回は、これで残り全部が削除できた（Cloud SQL の削除から約 9 時間後）。**ただし、公式は「Don't attempt to delete a private connection by deleting its associated VPC Network Peering connection directly」と、この方法を勧めていない**。Cloud SQL の削除済みの dev で、残るものが無いことを確認して使う、という位置づけにする（prod や、他のサービスが接続を使っている環境では使わない。その副作用は、未確認）。
+
+destroy 後は、Secret Manager、サービスアカウント、Artifact Registry、ログ バケット、LB、静的 IP、予約アドレスが残っていないかを、確認してください。残る課金の要因は、ほぼありません（state 用の GCS バケットと、`bootstrap/wif` は、意図して残します）。
+
 ### CI の設定（Workload Identity Federation）
 
 1. 初回のみ、手元から `bootstrap/wif` を apply します（ローカル state）。
@@ -66,33 +82,42 @@ ENV=dev terragrunt destroy                 # 検証が終わったら、必ず�
 
 ## 検証状況
 
-**dev 環境の apply / destroy は、まだ行っていません。** ここまでに確認できたのは、次の範囲です。
+dev 環境を、実際の GCP（無料トライアル、東京）に apply し、擬似障害を起こして destroy するまでを、検証しました（2026-11-24。時刻は UTC）。
 
-| 確認済み（CI / ローカル） | 内容 |
+| 確認済み | 内容 |
 | --- | --- |
-| 静的チェック | `terraform fmt` / `validate`、`terragrunt hcl fmt`、tflint（google ルールセット）、trivy、actionlint |
-| 単体テスト | `terraform test` 29 件（モックプロバイダ）。dev / prod の差、不正値の拒否、任意機能のフラグなど |
-| 実機: state バケット | `terragrunt plan` で、state 用の GCS バケットが自動作成された。東京、均一なバケットレベルのアクセス、バージョニング有効（Terragrunt 0.77.22）。ADR 0001 |
-| 実機: plan | 実プロジェクトに対する `terragrunt plan`（dev）が、37 リソースの追加として成功（provider の引数エラーなし。リソースは作成していない） |
-| 実機: WIF の bootstrap | `bootstrap/wif` の apply が成功（25 リソース）。組織ポリシーに阻まれずに、WIF のプール・プロバイダ・SA を作成できた |
-| 実機: CI の WIF 認証（plan） | PR の `terraform-plan`（dev / prod）が、キーなしの認証で成功し、plan 結果が PR コメントに出た（CI では `alarm_email` が未設定のため、35 リソース）。コメントに、プロジェクト ID・番号・メールが出ていないことも確認した。**apply 用 SA（Environment 経由）での認証は未確認** |
+| 静的チェック・単体テスト | `terraform fmt` / `validate`、`terragrunt hcl fmt`、tflint、trivy、actionlint、`terraform test` 30 件（モックプロバイダ） |
+| state バケット | Terragrunt 0.77.22 が、GCS バケットを自動作成（東京、均一なバケットレベルのアクセス、バージョニング有効）。ADR 0001 |
+| apply（手元） | 37 リソース、12:57:43〜13:11:09（約 13 分 26 秒）。Service Networking と Cloud SQL（`db-f1-micro`）を含め、一度で成功 |
+| HTTPS | HTTP 200、証明書の検証に成功。150 件のリクエストが、すべて 200（スケールゼロからの 1 回目は 0.42 秒） |
+| 擬似障害 | 5xx だけを返す小さなサーバ（公式の `python` イメージ）へ、一時的に差し替え。5xx を 640 件発生 |
+| バーンレートのアラート（発火） | 注入の開始から約 5 分後に、4 通のメール（fast: 1h ∧ 5m、slow: 6h ∧ 30m の各 2 条件）が届いた。レイテンシのアラートは、鳴らなかった（想定どおり） |
+| バーンレートのアラート（解決） | fast は最後の 5xx の約 14 分後、slow は約 33 分後に、解決のメールが届いた。**長窓が高いままでも、短窓が外れて閉じた**（AND 条件が働いた。ADR 0003） |
+| ダッシュボード | API で、全 8 タイルが使うクエリを実行し、実際のリクエストと一致することを確認（達成率 0.4145 = 453 / (453 + 640)、エラーバジェットは負、5xx は 640 件）。AWS 版で出た「障害中も 100%」の不具合は、出なかった。**画面での見た目は、確認していない** |
+| CI の WIF 認証（plan） | PR の `terraform-plan`（dev / prod）が、キーなしで成功し、plan が PR コメントに出た |
+| CI の WIF 認証と apply（dev） | main へのマージで、`environment: dev` のトークンによる WIF 認証と apply に成功（アラートポリシー 5 件の更新） |
+| destroy | 一度では完了しなかった。手順は、[destroy の注意](#destroy-の注意)に書いた |
 
-実機で見つかった問題と、わかったこと:
+### 実機で見つかった問題
 
-- **OIDC の `sub` が「不変のサブジェクト」形式**（`repo:OWNER@<id>/REPO@<id>:…`）で、従来形式の紐づけだと権限借用が拒否された。`github_subject_prefix` で対応（ADR 0006）。モックのテストでは見つからなかった。
-- **IAM の紐づけを作り直した直後は、反映が遅れる**ことがある。同時に走った prod の plan だけが、1 回目に失敗し、再実行で成功した。
-- Terragrunt は、バケットの存在確認が失敗すると、「バケットが無い」とみなして**作成を試みる**。plan 用 SA には作成権限が無いため、権限の問題でも「bucket 作成の 403」というエラーになり、原因が分かりにくい（最初のエラーを見る）。
+単体テスト（モック）では、見つからなかったものです。
 
-| 未検証（実機で確認が要る） | 理由・備考 |
+1. **OIDC の `sub` が「不変のサブジェクト」形式**（`repo:OWNER@<id>/REPO@<id>:…`）で、従来形式の紐づけだと権限借用が拒否された。`github_subject_prefix` で対応（ADR 0006）。
+2. **IAM の紐づけを作り直した直後は、反映が遅れる**ことがある。同時に走った 2 つのジョブの片方だけが、1 回目に失敗し、再実行で成功した。
+3. Terragrunt は、バケットの存在確認が失敗すると、「無い」とみなして**作成を試みる**。権限の問題でも「bucket 作成の 403」と出て、原因が分かりにくい（最初のエラーを見る）。
+4. **プロジェクト番号が、公開の PR コメントとログに出た**（dev の構築後、plan が `projects/<番号>/…` を出力。伏せ字の対象は、プロジェクト ID だけだった）。該当のコメントとログは削除し、番号も伏せ字にするよう修正した。
+5. **ダッシュボードが、plan のたびに「更新」になった**。API が返す形（0 の位置指定は省略、`targetAxis` の既定値）と、定義が違ったため。定義を合わせて解消。
+6. **CI にメールアドレスが渡らず、通知チャネルの削除が失敗**した（削除が、チャネルを参照するアラートポリシーの更新より先に走る）。任意の Secrets `ALARM_EMAIL` を、CI の plan / apply にも渡す形に修正。
+7. **通知の件名から、緊急かチケットかが分からず、重大度も無かった**。条件名に `[page]` / `[ticket]` を付け、`severity` を設定した。
+8. **destroy が、一度で完了しない**（Cloud Run のサブネットのアドレスの解放待ち、Service Networking の接続の削除の失敗）。
+
+| 未検証 | 理由・備考 |
 | --- | --- |
-| apply / destroy 全体、HTTPS での応答 | 未実施（フェーズ 3） |
-| Service Networking 接続の destroy | 「producer が使用中」で失敗する報告がある（ADR 0005） |
-| Cloud SQL の tier（dev: `db-f1-micro`、prod: `db-custom-1-3840`） | 利用可否を、実機で確認する |
-| SLO のフィルタ、長窓 ∧ 短窓の AND のバーンレートのアラートの発火と復旧 | 公式の例に無い書き方（ADR 0003） |
-| ダッシュボードのタイル | 単体テストで検証できない。AWS 版では、実機でしか見つからない不具合があった |
-| apply 用 SA（GitHub Environment 経由）での WIF 認証、main→dev の自動デプロイ | Environment の作成と、dev の apply の際に確認する（ADR 0006） |
+| CI でゼロから 37 リソースを apply（apply 用 SA のロールが足りるか） | 手元の apply は、自分の権限で行った。CI の apply は、更新の 5 件だけ確認した |
+| prod 環境（Cloud SQL の高可用、常時 1 台の Cloud Run、`db-custom-1-3840`） | 実環境で未確認 |
 | 外部 HTTPS LB と Cloud Armor | ドメインを持っていないため、**実機検証の予定なし** |
-| prod 環境、メール通知 | 実機で未確認 |
+| ダッシュボードの画面での見た目 | API でクエリと数値のみ確認 |
+| 費用の実績 | 請求への反映を待って、`docs/cost.md` に記録する |
 
 ## 注意事項
 
@@ -109,7 +134,7 @@ ENV=dev terragrunt destroy                 # 検証が終わったら、必ず�
 | 0 | 要件定義・基本設計 | 完了 |
 | 1 | Cloud Run 構成の実装 | 完了（実機未検証） |
 | 2 | GKE Autopilot の追加 | 未着手 |
-| 3 | 実機検証と実績の記録 | 未着手 |
+| 3 | 実機検証と実績の記録 | 一部完了（dev を検証。prod・LB は未検証、費用の実績は記録待ち） |
 
 ## ライセンス
 MIT
